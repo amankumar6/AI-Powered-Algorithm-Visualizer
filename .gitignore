@@ -24,4 +24,4 @@ dist-ssr
 *.sw?
 
 .env
-# IMPLEMENTATION_DOC.MD 
+implementation_doc.md
