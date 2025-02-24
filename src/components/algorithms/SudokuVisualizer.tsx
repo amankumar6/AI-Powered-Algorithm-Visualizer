@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { SudokuSolver } from '../../utils/sudokuSolver'
 import { SudokuAIService } from '../../services/ai/sudokuAIService';
+import { SudokuRecognitionService } from '../../services/ai/sudokuRecognitionService';
 import VisualizerHeader from '../common/VisualizerHeader';
 
 interface SudokuVisualizerProps {
@@ -15,7 +16,10 @@ export default function SudokuVisualizer({ onBack }: SudokuVisualizerProps) {
   const [isPlayMode, setIsPlayMode] = useState(false)
   const [selectedCell, setSelectedCell] = useState<[number, number] | null>(null)
   const [isRunning, setIsRunning] = useState(false)
+  const [isProcessingImage, setIsProcessingImage] = useState(false)
   const solverRef = useRef<SudokuSolver | null>(null)
+  const recognitionServiceRef = useRef<SudokuRecognitionService | null>(null)
+  const aiService = useRef<SudokuAIService | null>(null)
   const [highlightedCell, setHighlightedCell] = useState<{
     position: [number, number];
     type: 'try' | 'place' | 'backtrack' | null;
@@ -26,15 +30,15 @@ export default function SudokuVisualizer({ onBack }: SudokuVisualizerProps) {
   const [isLoadingHint, setIsLoadingHint] = useState(false);
   const [hint, setHint] = useState<string>('');
   const isFirstRender = useRef(true);
-  const aiService = useRef<SudokuAIService | null>(null);
 
-  // Initialize AI service
+  // Initialize services
   useEffect(() => {
     try {
       aiService.current = SudokuAIService.getInstance();
+      recognitionServiceRef.current = SudokuRecognitionService.getInstance();
     } catch (error) {
-      console.error('Failed to initialize AI service:', error);
-      setMessage('AI service initialization failed. Some features may be limited.');
+      console.error('Failed to initialize services:', error);
+      setMessage('Service initialization failed. Some features may be limited.');
     }
   }, []);
 
@@ -303,6 +307,47 @@ export default function SudokuVisualizer({ onBack }: SudokuVisualizerProps) {
     }
   }, [generatePuzzle])
 
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !recognitionServiceRef.current) {
+      setMessage('No file selected or recognition service not available');
+      return;
+    }
+
+    try {
+      setIsProcessingImage(true);
+      setMessage('Processing Sudoku image...');
+      
+      const recognizedGrid = await recognitionServiceRef.current.recognizeGrid(file);
+      
+      // Update the grid and mark original numbers
+      setGrid(recognizedGrid);
+      const newOriginalNumbers = Array(9).fill(null).map(() => Array(9).fill(false));
+      for (let i = 0; i < 9; i++) {
+        for (let j = 0; j < 9; j++) {
+          if (recognizedGrid[i][j] !== 0) {
+            newOriginalNumbers[i][j] = true;
+          }
+        }
+      }
+      setOriginalNumbers(newOriginalNumbers);
+      setMessage('Sudoku puzzle loaded successfully!');
+      
+      // Reset any previous game state
+      setIsRunning(false);
+      setHighlightedCell({ position: [-1, -1], type: null });
+      
+    } catch (error) {
+      console.error('Error processing image:', error);
+      setMessage(error instanceof Error ? error.message : 'Failed to process image. Please try again.');
+      // Reset the file input
+      const fileInput = document.getElementById('sudoku-image-input') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
+    } finally {
+      setIsProcessingImage(false);
+    }
+  };
+
   return (
     <div className="p-6 min-h-screen bg-background">
       <VisualizerHeader title="Sudoku Visualizer" onBack={onBack} />
@@ -384,6 +429,24 @@ export default function SudokuVisualizer({ onBack }: SudokuVisualizerProps) {
               Solve
             </button>
           )}
+          <div className="relative">
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImageUpload}
+              className="hidden"
+              id="sudoku-image-input"
+              disabled={isProcessingImage || isRunning}
+            />
+            <label
+              htmlFor="sudoku-image-input"
+              className={`px-4 py-2 rounded bg-purple-500 text-white cursor-pointer ${
+                (isProcessingImage || isRunning) ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+            >
+              {isProcessingImage ? 'Processing...' : 'Upload Sudoku Image'}
+            </label>
+          </div>
         </div>
       </div>
 

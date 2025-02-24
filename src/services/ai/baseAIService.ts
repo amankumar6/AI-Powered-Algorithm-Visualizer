@@ -4,6 +4,7 @@ import { AI_GENERATION_CONFIG, getAIConfig } from '../config/aiConfig';
 export abstract class BaseAIService {
   protected genAI: GoogleGenerativeAI;
   protected model: GenerativeModel;
+  protected visionModel: GenerativeModel;
 
   constructor() {
     const API_KEY = getAIConfig();
@@ -14,7 +15,11 @@ export abstract class BaseAIService {
         model: "gemini-pro",
         generationConfig: AI_GENERATION_CONFIG,
       });
-      console.log('AI model initialized successfully');
+      this.visionModel = this.genAI.getGenerativeModel({
+        model: "gemini-1.5-flash",
+        generationConfig: AI_GENERATION_CONFIG,
+      });
+      console.log('AI models initialized successfully');
     } catch (error) {
       console.error('Error initializing AI:', error);
       throw error;
