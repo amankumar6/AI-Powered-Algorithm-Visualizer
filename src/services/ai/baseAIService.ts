@@ -11,7 +11,7 @@ export abstract class BaseAIService {
     try {
       this.genAI = new GoogleGenerativeAI(API_KEY);
       this.model = this.genAI.getGenerativeModel({
-        model: "gemini-pro",
+        model: "gemini-2.0-flash",
         generationConfig: AI_GENERATION_CONFIG,
       });
       console.log('AI model initialized successfully');
