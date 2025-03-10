@@ -19,15 +19,17 @@ export class SudokuRecognitionService extends BaseAIService {
     return SudokuRecognitionService.instance;
   }
 
-  private async imageToBase64(file: File): Promise<string> {
+  private async preprocessImage(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.readAsDataURL(file);
       reader.onload = () => {
         const base64String = reader.result as string;
-        resolve(base64String.split(',')[1]);
+        // Remove the data URL prefix (e.g., "data:image/jpeg;base64,")
+        const base64 = base64String.split(',')[1];
+        resolve(base64);
       };
-      reader.onerror = error => reject(error);
+      reader.onerror = (error) => reject(error);
+      reader.readAsDataURL(file);
     });
   }
 
@@ -61,44 +63,55 @@ export class SudokuRecognitionService extends BaseAIService {
 
   public async recognizeGrid(imageFile: File): Promise<number[][]> {
     try {
-      const base64Image = await this.imageToBase64(imageFile);
+      const base64Image = await this.preprocessImage(imageFile);
       
-      const prompt = `Analyze this Sudoku puzzle image and return ONLY a 9x9 array representing the grid.
-Use 0 for empty cells. Format the response as a valid JSON array of arrays.
-Example format: [[1,2,3,0,0,0,7,8,9],[...],...]
-Do not include any other text in your response.
-IMPORTANT: Make sure there are no duplicate numbers in any row, column, or 3x3 box.`;
+      const prompt = `Analyze this Sudoku grid image:
+      1. Scan the grid cell by cell, left to right, top to bottom
+      2. For each cell:
+        - If you see a number (1-9), record it
+        - If empty, use 0
+      3. Return ONLY a 9x9 JSON array
+      4. No explanations, just the array
 
-      const result = await this.visionModel.generateContent([
-        prompt,
-        {
-          inlineData: {
-            mimeType: imageFile.type || "image/jpeg",
-            data: base64Image
+      Important: Double-check each number's position carefully.`;
+
+      let attempts = 0;
+      const maxAttempts = 2;
+      
+      while (attempts < maxAttempts) {
+        try {
+          const result = await this.visionModel.generateContent([
+            prompt,
+            {
+              inlineData: {
+                mimeType: imageFile.type || "image/jpeg",
+                data: base64Image
+              }
+            }
+          ]);
+
+          const response = await result.response;
+          const text = response.text();
+          console.log('Raw AI Response:', text);
+
+          const grid = this.parseGridFromText(text);
+          console.log('Parsed Grid:', JSON.stringify(grid));
+          
+          if (this.isValidSudokuGrid(grid)) {
+            return grid;
           }
+          
+          attempts++;
+        } catch (error) {
+          console.error(`Attempt ${attempts + 1} failed:`, error);
+          attempts++;
         }
-      ]);
-
-      const response = await result.response;
-      const text = response.text();
-      console.log('AI Response:', text);
-
-      if (!text) {
-        throw new Error('Empty response from AI');
       }
-
-      const grid = this.parseGridFromText(text);
-      console.log('Parsed Grid:', grid);
-
-      // Validate the grid
-      if (!this.isValidSudokuGrid(grid)) {
-        throw new Error('Invalid Sudoku grid configuration - check console for details');
-      }
-
-      return grid;
+      
+      throw new Error('Failed to get a valid grid after multiple attempts');
     } catch (error) {
-      console.error('Error recognizing Sudoku grid:', error);
-      throw error instanceof Error ? error : new Error('Failed to recognize Sudoku grid from image');
+      console.error('Error in recognizeGrid:', error);
+      throw error instanceof Error ? error : new Error('Failed to recognize Sudoku grid');
     }
   }
 

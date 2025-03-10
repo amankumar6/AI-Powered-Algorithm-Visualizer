@@ -16,7 +16,7 @@ export abstract class BaseAIService {
         generationConfig: AI_GENERATION_CONFIG,
       });
       this.visionModel = this.genAI.getGenerativeModel({
-        model: "gemini-1.5-flash",
+        model: "gemini-1.5-pro",
         generationConfig: AI_GENERATION_CONFIG,
       });
       console.log('AI models initialized successfully');
